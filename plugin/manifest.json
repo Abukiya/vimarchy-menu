@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "abukiya.menu",
+  "name": "vimarchy-menu",
+  "version": "1.0.0",
+  "author": "abukiya",
+  "description": "vimarchy-menu — Omarchy menu with vim-style SUPER+HJKL navigation (H=back, J=down, K=up, L=enter)",
+  "kinds": [
+    "menu",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "menu": "Menu.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "vimarchy-menu",
+    "description": "vimarchy-menu — vim-style menu",
+    "category": "Compositor",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.menu"
+  }
+}

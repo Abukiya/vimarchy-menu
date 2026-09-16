@@ -1,0 +1,6 @@
+# Runtime / generated — not tracked
+*.tmp
+*.log
+.DS_Store
+*.swp
+*~
