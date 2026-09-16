@@ -1,11 +1,11 @@
-# Shell patch — `createScopedPluginShell` canon fix
+# Shell patch — reverted (do not edit /usr/share)
 
-Patches `/usr/share/omarchy/shell/shell.qml` so cloned menu `abukiya.menu` receives `appLibrary` (Apps 48 rows instead of "Nothing here yet").
+> **Status: reverted 2026-09-16.** The 2-line patch to `/usr/share/omarchy/shell/shell.qml` violated the Omarchy skill rule (`/usr/share/omarchy` is package-owned, overwritten on `omarchy update`). It has been removed. This file is kept for history.
 
-## Diff
+## What the patch did
 
 ```diff
---- /usr/share/omarchy/shell/shell.qml.bak.vimarchy
+--- /usr/share/omarchy/shell/shell.qml
 +++ /usr/share/omarchy/shell/shell.qml
 @@ -569,7 +569,8 @@
   function createScopedPluginShell(manifest, cacheKey, allowOwnService, barCapabilities) {
@@ -14,11 +14,7 @@ Patches `/usr/share/omarchy/shell/shell.qml` so cloned menu `abukiya.menu` recei
 -  var profile = shell.pluginShellCapabilityProfile(manifest, allowOwnService, barCapabilities)
 +  var _canon = shell.pluginRegistry.installedPlugins[key] || manifest
 +  var profile = shell.pluginShellCapabilityProfile(_canon, allowOwnService, barCapabilities)
-    var cached = _pluginShellApis[cacheKey]
-    var descriptor = _pluginShellApiDescriptors[cacheKey]
-    if (cached && descriptor && descriptor.pluginId === key
 @@ -600,7 +601,7 @@
-
     var api = pluginShellApiComponent.createObject(null, {
       pluginId: key,
 -     appLibrary: shell.manifestHasKind(manifest, "menu")
@@ -26,34 +22,21 @@ Patches `/usr/share/omarchy/shell/shell.qml` so cloned menu `abukiya.menu` recei
         ? shell.pluginAppLibraryFor(cacheKey, key) : null,
 ```
 
-## Apply
+It made cloned menu `abukiya.menu` receive `appLibrary` (Apps 48 rows instead of "Nothing here yet").
 
-```sh
-sudo cp /usr/share/omarchy/shell/shell.qml /usr/share/omarchy/shell/shell.qml.bak.vimarchy  # if not yet backed up
-# apply the two substitutions above (use your editor or the patch from apps-blank-root-cause.md)
-omarchy restart shell
-# verify
-grep -q "_canon = shell.pluginRegistry.installedPlugins" /usr/share/omarchy/shell/shell.qml && echo "present"
-sudo diff -u /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml
-```
-
-## Verify
-
-```sh
-omarchy plugin list | grep -E 'menu|abukiya'  # abukiya.menu enabled
-# summon apps and check it populates (visual 48 rows) or via temporary appsDebug injection
-omarchy-shell shell summon abukiya.menu '{"menu":"apps"}'
-hyprctl layers 2>&1 | grep omarchy-menu
-omarchy-shell shell hide abukiya.menu
-```
-
-## Revert
+## Revert (already done)
 
 ```sh
 sudo cp /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml
+sudo rm -f /usr/share/omarchy/shell/shell.qml.bak.vimarchy
 omarchy restart shell
+grep -c _canon /usr/share/omarchy/shell/shell.qml  # 0 = stock
 ```
 
-## Upkeep
+## Proper fix (in ~/.config)
 
-`/usr/share` is pacman-owned. An `omarchy` package update overwrites this file. Re-apply the 2-line patch after each update and restart shell.
+`fallbackAppLibrary` in `Menu.qml` (DesktopEntries + `launcher.hides` 39 preloaded + `hidden-entries.sh` 27, `isHiddenEntry` filter 65→48, `FileView`/`Process` watchers, eager merge in `rebuildItemsFromSources`) — see [Apps blank root cause](apps-blank-root-cause.md#correction-2026-09-16--proper-user-space-fix). No `/usr/share` edit needed; survives `pacman -Syu`.
+
+## Upstream
+
+Report the `createScopedPluginShell` stale-manifest bug via `contributing.md` (Omarchy bug report) instead of patching package files.

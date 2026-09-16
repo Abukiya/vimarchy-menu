@@ -23,7 +23,7 @@ Plain `hjkl` without SUPER still types into filter. `ESC` clears filter or close
 vimarchy-menu/
   plugin/                 # source of truth — copied to Omarchy on install/sync
     manifest.json         # id=abukiya.menu, clonedFrom=omarchy.menu, kinds=[menu,bar-widget]
-    Menu.qml              # patched Keys.onPressed at ~1092 + mergeAppRows _lib fallback at ~290
+    Menu.qml              # vim nav at ~1150 + fallbackAppLibrary ~81-210 (DesktopEntries + launcher.hides + hidden-entries.sh, no /usr/share edit)
     MenuModel.js          # upstream model (unchanged)
     BarWidget.qml         # bar button (routes via clonedFrom)
   install.sh              # copy plugin/ -> ~/.config/omarchy/plugins/abukiya.menu + enable
@@ -60,11 +60,7 @@ diff -q ~/.config/omarchy/plugins/abukiya.menu/Menu.qml ~/Projects/vimarchy-menu
 
 Hyprland bindings are applied automatically via `~/.config/hypr/bindings.lua` — see [Hyprland integration](docs/hyprland-integration.md).
 
-Shell patch for Apps is required — see [Shell patch](docs/shell-patch.md). Verify:
-
-```sh
-grep -q "_canon = shell.pluginRegistry.installedPlugins" /usr/share/omarchy/shell/shell.qml && echo "shell fix present"
-```
+Apps fallback is self-contained — see [Apps blank root cause](docs/apps-blank-root-cause.md). No edit to `/usr/share` is needed; the menu ships its own `fallbackAppLibrary` (DesktopEntries + `launcher.hides` 39 + `hidden-entries.sh` 27 → 65→48) in `~/.config` (Omarchy skill rule: never edit `/usr/share/omarchy`).
 
 ## Usage
 
@@ -95,7 +91,7 @@ Patch is ~20 lines in `Menu.qml` `Keys.onPressed` — four `else if` branches ga
 
 Hyprland layer handoff: Hypr eats SUPER before Exclusive layer. `bindings.lua` unbinds `SUPER+H/J/K/L` on `layer.opened:omarchy-menu` and rebinds on `layer.closed`. See [Hyprland integration](docs/hyprland-integration.md).
 
-Apps menu: fixed shell race + Menu.qml `_lib` fallback. Was showing "Nothing here yet" with 0 rows. See [Apps blank root cause](docs/apps-blank-root-cause.md).
+Apps menu: `fallbackAppLibrary` in `~/.config` (no `/usr/share` edit) — reads `DesktopEntries` directly, filters 65→48 via `launcher.hides` + `hidden-entries.sh`, eager merge avoids blank flash. Was showing "Nothing here yet" with 0 rows. See [Apps blank root cause](docs/apps-blank-root-cause.md).
 
 ## Verification
 
@@ -114,7 +110,7 @@ hyprctl layers 2>&1 | grep omarchy-menu
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Menu not opening | abukiya.menu disabled | `omarchy plugin enable abukiya.menu && omarchy-shell shell rescanPlugins` |
-| Apps still "Nothing here yet" | shell.qml not patched | Re-apply [Shell patch](docs/shell-patch.md) and `omarchy restart shell` |
+| Apps still "Nothing here yet" | fallback not loaded / shell race | Verify `grep -c fallbackAppLibrary ~/Projects/vimarchy-menu/plugin/Menu.qml` → 1, `omarchy plugin validate` → 0, `omarchy restart shell`, then `SUMMON apps` → layer `omarchy-menu` and 48 rows (65 vals filtered) |
 | SUPER+J moves window not menu | bindings.lua not installed | Ensure `~/.config/hypr/bindings.lua` has layer.opened/closed block; `hyprctl reload`; check `hyprctl binds` counts |
 | Bar stalls after switch | quickshell cache | `omarchy restart shell` |
 | `omarchy plugin validate` fails | edit broke QML | `diff -u` live vs stock, revert; check `qmllint` |
@@ -142,11 +138,4 @@ omarchy plugin remove abukiya.menu --yes
 # or: rm -rf ~/.config/omarchy/plugins/abukiya.menu && omarchy-shell shell rescanPlugins
 ```
 
-Revert shell patch:
-
-```sh
-sudo cp /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml
-omarchy restart shell
-```
-
-> Shell patch is overwritten on `pacman -Syu omarchy` — re-apply after update.
+No `/usr/share` edit is needed. The `Apps` fallback lives entirely in `~/.config/omarchy/plugins/abukiya.menu/` (`fallbackAppLibrary` in `Menu.qml` + `launcher.hides` + `hidden-entries.sh` → 48 rows). It survives `pacman -Syu omarchy`.

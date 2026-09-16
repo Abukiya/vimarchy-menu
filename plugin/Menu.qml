@@ -75,9 +75,121 @@ Item {
   property var providerQueue: []
   property int providerRevision: 0
 
-  // Shared application engine (entries, hidden filters, icons, launch,
-  // removal), owned by the shell and also used by the standalone launcher.
-  readonly property var appLibrary: root.shell ? root.shell.appLibrary : null
+  // Fallback when shell.appLibrary is null (stock shell bug for cloned menus).
+  // Keeps Apps usable entirely from ~/.config — never edits /usr/share.
+  QtObject {
+    id: fallbackAppLibrary
+    property string omarchyPath: Quickshell.env("OMARCHY_PATH")
+    property var configuredHiddenEntryIds: ({ "avahi-discover": true, "bssh": true, "btop": true, "bvnc": true, "cmake-gui": true, "cups": true, "dropbox": true, "electron34": true, "electron36": true, "electron37": true, "fcitx5-configtool": true, "fcitx5-wayland-launcher": true, "foot-server": true, "footclient": true, "hermes": true, "java-java-openjdk": true, "jconsole-java-openjdk": true, "jshell-java-openjdk": true, "kbd-layout-viewer5": true, "kcm_fcitx5": true, "kcm_kaccounts": true, "kvantummanager": true, "libreoffice-base": true, "libreoffice-draw": true, "libreoffice-math": true, "libreoffice-startcenter": true, "libreoffice-xsltfilter": true, "limine-snapper-restore": true, "lstopo": true, "org.fcitx.Fcitx5": true, "org.fcitx.fcitx5-config-qt": true, "org.fcitx.fcitx5-migrator": true, "org.fcitx.fcitx5-qt5-gui-wrapper": true, "org.fcitx.fcitx5-qt6-gui-wrapper": true, "qv4l2": true, "qvidcap": true, "uuctl": true, "xgps": true, "xgpsspeed": true })
+    property var desktopHiddenEntryIds: ({})
+    signal appsChanged()
+    function normalizeDesktopId(id) {
+      var v = String(id||"").trim()
+      if (v.slice(-8)===".desktop") v=v.slice(0,-8)
+      return v
+    }
+    function loadConfiguredHides(raw) {
+      var next = ({})
+      var lines = String(raw||"").split(/\n/)
+      for (var i=0;i<lines.length;i++){ var id=normalizeDesktopId(lines[i]); if(id.length>0) next[id]=true }
+      configuredHiddenEntryIds = next
+      appsChanged()
+    }
+    function loadDesktopHidden(raw) {
+      var next = ({})
+      var lines = String(raw||"").split(/\n/)
+      for (var i=0;i<lines.length;i++){ var id=normalizeDesktopId(lines[i]); if(id.length>0) next[id]=true }
+      desktopHiddenEntryIds = next
+      appsChanged()
+    }
+    function hiddenScanCommand() {
+      var desktop=[Quickshell.env("XDG_CURRENT_DESKTOP"), Quickshell.env("XDG_SESSION_DESKTOP"), Quickshell.env("DESKTOP_SESSION")].filter(function(v){return String(v||"").length>0}).join(":")
+      var script=omarchyPath+"/shell/services/hidden-entries.sh"
+      return Util.shellQuote(script)+" "+Util.shellQuote(desktop)
+    }
+    function entryName(e) { return String((e && e.name) || (e && e.id) || "") }
+    function entrySubtext(e) { return String((e && e.genericName) || "") }
+    function isHiddenEntry(e) {
+      var id=String((e&&e.id)||"")
+      return configuredHiddenEntryIds[id]===true || desktopHiddenEntryIds[id]===true
+    }
+    function sortedEntries(query) {
+      var vals = []
+      try { vals = DesktopEntries.applications.values || [] } catch (e) { vals = [] }
+      var q = String(query || "").trim().toLowerCase()
+      var rows = []
+      for (var i = 0; i < vals.length; i++) {
+        var e = vals[i]
+        if (!e || e.noDisplay) continue
+        if (isHiddenEntry(e)) continue
+        var n = entryName(e)
+        if (!n) continue
+        if (q) {
+          var hay = [e.name, e.genericName, e.comment, e.id].join(" ").toLowerCase()
+          if (hay.indexOf(q) === -1) continue
+        }
+        rows.push({ entry: e, score: 0, key: n.toLowerCase(), name: n.toLowerCase() })
+      }
+      rows.sort(function(a,b){ if(a.key<b.key) return -1; if(a.key>b.key) return 1; if(a.name<b.name) return -1; if(a.name>b.name) return 1; return 0 })
+      return rows
+    }
+    function iconSource(icon) {
+      var v = String(icon || "")
+      if (!v) return Quickshell.iconPath("application-x-executable", true)
+      if (v.indexOf("file://")===0 || v.indexOf("image://")===0) return v
+      if (v.charAt(0)==="/") return Util.fileUrl(v)
+      var themed = Quickshell.iconPath(v, true)
+      if (themed.length>0) return themed
+      return Quickshell.iconPath("application-x-executable", true)
+    }
+    function refreshIcons() {}
+    function launch(desktopId, name) {
+      var id = String(desktopId||"")
+      if (!id) return
+      Util.execDetached("uwsm-app -- gtk-launch " + Util.shellQuote(id + ".desktop"))
+    }
+    function remove(desktopId, name) {
+      var id = String(desktopId||"")
+      if (!id) return
+      Util.execDetached(Util.shellQuote(omarchyPath + "/bin/omarchy-remove-launcher-entry") + " " + Util.shellQuote(id) + " " + Util.shellQuote(String(name||id)))
+    }
+  }
+  FileView {
+    id: fallbackHidesFile
+    path: root.omarchyPath + "/default/omarchy/launcher.hides"
+    watchChanges: true
+    printErrors: false
+    onLoaded: fallbackAppLibrary.loadConfiguredHides(text())
+    onFileChanged: reload()
+    onLoadFailed: fallbackAppLibrary.loadConfiguredHides("")
+  }
+  QtObject { id: fallbackHiddenOut; property string text: "" }
+  Process {
+    id: fallbackHiddenScan
+    command: ["bash","-c", fallbackAppLibrary.hiddenScanCommand()]
+    stdout: SplitParser { onRead: function(line){ fallbackHiddenOut.text += line + "\n" } }
+    onStarted: fallbackHiddenOut.text=""
+    onExited: fallbackAppLibrary.loadDesktopHidden(fallbackHiddenOut.text)
+    Component.onCompleted: running=true
+  }
+  Connections {
+    id: fallbackDesktopWatcher
+    target: DesktopEntries.applications
+    function onValuesChanged() { fallbackHiddenScan.running=true; if (!root.shell || !root.shell.appLibrary) fallbackAppLibrary.appsChanged() }
+  }
+  Connections {
+    target: fallbackAppLibrary
+    function onAppsChanged() {
+      if (!root.shell || !root.shell.appLibrary) {
+        // Merge even before first Apps open so hide filters (launcher.hides + desktop hidden)
+        // apply immediately — otherwise first open briefly shows 65 before correcting to 48.
+        if (root.rowsLoaded) try { root.mergeAppRows() } catch(e) {}
+        else if (root.providersLoaded["apps"]) root.mergeAppRows()
+      } else if (root.providersLoaded["apps"]) root.mergeAppRows()
+    }
+  }
+  // Prefers shell's appLibrary; falls back to local DesktopEntries.
+  readonly property var appLibrary: (root.shell && root.shell.appLibrary) ? root.shell.appLibrary : fallbackAppLibrary
   property bool deleteConfirmOpen: false
   property var deleteTarget: null
   onOpenedChanged: if (!opened) { deleteConfirmOpen = false; deleteTarget = null }
@@ -251,6 +363,7 @@ Item {
     root.items = mergedMenu.items
     root.itemOrder = mergedMenu.itemOrder
     root.rowsLoaded = true
+    try { if (!root.shell || !root.shell.appLibrary) root.mergeAppRows() } catch(e) {}
     root.evaluateGuards()
     if (root.opened) {
       root.rebuildDisplay()

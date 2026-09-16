@@ -6,7 +6,7 @@
 | Plugin dir | `/usr/share/omarchy/shell/plugins/menu` (read-only) | `~/.config/omarchy/plugins/abukiya.menu` (copy of `plugin/`) + repo `~/Projects/vimarchy-menu/plugin` |
 | Manifest | `id=omarchy.menu` | `id=abukiya.menu`, `omarchy.clonedFrom=omarchy.menu`, `kinds=[menu,bar-widget]`, `keepLoaded=true` |
 | Keys | `Up/Down` select, `Left/Backspace` goBack, `Right/Enter` activate, type to filter | Same + `SUPER+H/J/K/L` (H=back, J=down, K=up, L=enter); plain `hjkl` still filters |
-| AppLibrary | `shell.appLibrary` via `pluginShellFor` (stock wiring) | Same, with canon fix in `/usr/share/omarchy/shell/shell.qml` + `_lib` fallback in `Menu.qml:290` |
+| AppLibrary | `shell.appLibrary` via `pluginShellFor` (stock wiring, 48 rows after hides) | Same when stock works; when `shell.appLibrary` is null for clone, `fallbackAppLibrary` in `~/.config` (DesktopEntries + `launcher.hides` 39 + `hidden-entries.sh` 27 → 65→48, eager merge, no `/usr/share` edit) — `readonly property var appLibrary: shell.appLibrary ? shell : fallback` |
 | Hypr bindings | `SUPER+H/J/K/L` focus window via `hl.dsp.focus` | Same when menu closed; freed while `omarchy-menu` layer open so Qt sees `MetaModifier+J/K/H/L` |
 | Bar button | `omarchy-shell shell toggle omarchy.menu` | Resolves to clone automatically — no rebind needed |
 | Log | `/run/user/1000/quickshell/by-id/*/log.log` | Same namespace `omarchy-menu` (layer `WlrLayershell.namespace: "omarchy-menu"`) |
@@ -38,5 +38,6 @@ hyprctl binds 2>&1 | awk 'BEGIN{RS="\n\n"} /Focus left|Focus down|Focus up|Focus
 ```sh
 omarchy plugin disable abukiya.menu && omarchy-shell shell rescanPlugins  # temp stock
 omarchy plugin enable abukiya.menu && omarchy-shell shell rescanPlugins   # restore
-sudo cp /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml && omarchy restart shell  # revert shell fix
+# shell is stock (no /usr/share edit) — fallback lives in ~/.config; no sudo revert needed
+# history: sudo cp /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml && omarchy restart shell  # old canon fix, now reverted
 ```

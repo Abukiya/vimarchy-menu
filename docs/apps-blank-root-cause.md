@@ -51,7 +51,7 @@ Panel `onLoaded` then assigned `item.shell = pluginShellFor(manifest)` which als
 
 Later rescans created a revoking replacement (`revoke old` in log) that did get `menu` right, but the already-open menu instance kept the old null shell.
 
-## Fix — 2 lines in `shell.qml`
+## Fix — 2 lines in `shell.qml` (history — reverted, do not apply)
 
 ```diff
  function createScopedPluginShell(manifest, cacheKey, allowOwnService, barCapabilities) {
@@ -114,15 +114,53 @@ appsDebug open:
 
 Placeholder hidden; 48 app rows listed alphabetically.
 
-## Revert
+## Revert (already done — shell is stock)
 
 ```sh
 sudo cp /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml
+sudo rm -f /usr/share/omarchy/shell/shell.qml.bak.vimarchy  # no .bak remains
 omarchy restart shell
+# grep -c _canon /usr/share/omarchy/shell/shell.qml  # 0
 ```
 
-Overwritten on `pacman -Syu omarchy` — re-apply after update.
+Overwritten on `pacman -Syu omarchy` — the old fix would have needed re-apply; the current `~/.config` fallback does not.
 
 ## Related — Hypr handoff
 
 Separate from Apps blank but required for vim nav: see `hyprland-integration.md`. Hypr eats SUPER before Exclusive; layer unbind fixes Qt delivery.
+
+## Correction (2026-09-16) — proper user-space fix (current)
+
+The 2-line `/usr/share/omarchy/shell/shell.qml` patch described above violated the Omarchy skill rule (`/usr/share/omarchy` is package-owned, overwritten on `omarchy update`). It has been reverted and shell is stock:
+
+```sh
+sudo cp /usr/share/omarchy/shell/shell.qml.bak.vimarchy /usr/share/omarchy/shell/shell.qml
+sudo rm -f /usr/share/omarchy/shell/shell.qml.bak.vimarchy
+omarchy restart shell
+# verify stock:
+grep -c _canon /usr/share/omarchy/shell/shell.qml  # 0
+grep -c fallbackAppLibrary ~/Projects/vimarchy-menu/plugin/Menu.qml  # 1
+omarchy plugin validate ~/Projects/vimarchy-menu/plugin  # 0
+```
+
+Proper fix — entirely in `~/.config` (`plugin/Menu.qml` 1564 lines, live `~/.config/omarchy/plugins/abukiya.menu/Menu.qml` identical, no `AppSearch.js` vendoring, no `/usr/share` edit):
+
+- `fallbackAppLibrary` QtObject `~81-210` — reads `DesktopEntries.applications.values` directly, with hide filtering 65→48:
+  - `configuredHiddenEntryIds` preloaded with 39 ids from `/usr/share/omarchy/default/omarchy/launcher.hides` (`avahi-discover` … `xgpsspeed`) and kept live via `FileView fallbackHidesFile` watching that path.
+  - `desktopHiddenEntryIds` populated via `Process fallbackHiddenScan` running `hidden-entries.sh` (27 ids for `Hyprland`/`omarchy` from `OnlyShowIn`/`NotShowIn`/`Hidden` parsing), re-run on `DesktopEntries.applications` changes.
+  - `isHiddenEntry(e)` checks both maps; `sortedEntries(query)` skips `noDisplay` and hidden, then alpha-sorts (query filter joins `name`/`genericName`/`comment`/`id`).
+  - `iconSource`/`launch` (`uwsm-app -- gtk-launch`)/`remove` (`omarchy-remove-launcher-entry`) mirror stock `AppLibrary` so launch feedback and uninstall work.
+- `readonly property var appLibrary: (root.shell && root.shell.appLibrary) ? root.shell.appLibrary : fallbackAppLibrary` — prefers stock when present, otherwise local DesktopEntries.
+- Watchers: `Connections fallbackDesktopWatcher` on `DesktopEntries.applications` retriggers hidden scan + `appsChanged`; `Connections` on `fallbackAppLibrary.appsChanged` merges immediately (even before first `Apps` open) so hide filters apply without flash.
+- Eager merge in `rebuildItemsFromSources()` right after `rowsLoaded=true`: `try { if (!shell || !shell.appLibrary) mergeAppRows() } catch(e) {}` — ensures first `Apps` paint after restart has items (334→399) without needing a second open.
+- Kept `_lib` fallback in `mergeAppRows` for robustness (`root.appLibrary || shell.appLibrary`).
+
+Counts (restart `192381`, 197980):
+- `DesktopEntries.applications.values` 65 entries; after `launcher.hides` 39 alone 65→48; with both hides 39+27 still 48 (overlap); logs `HIDE_CHECK vals=65 rows=48 cfg=39 desk=27`.
+
+This keeps Apps at 48 rows without touching `/usr/share`, survives `pacman -Syu omarchy`, and complies with the Omarchy skill's critical safety rule. The upstream `createScopedPluginShell` stale-manifest bug should be reported via `contributing.md` instead of patching package files.
+
+## Evolution — 65 vs 48
+
+Initial fallback had `isHiddenEntry() => false`, so `Apps` briefly showed 65 (all `noDisplay=false` entries). Adding the hide mirrors above restored the stock 48. The 17 delta are the ids hidden by `launcher.hides` + desktop `NotShowIn`/`OnlyShowIn` (e.g. fcitx5 helpers, libreoffice sub-entries, `org.fcitx.*`, etc.).
+
