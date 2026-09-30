@@ -4,6 +4,7 @@
   "name": "vimarchy-menu",
   "version": "1.0.0",
   "author": "abukiya",
+  "license": "MIT",
   "description": "vimarchy-menu — Omarchy menu with vim-style SUPER+HJKL navigation (H=back, J=down, K=up, L=enter)",
   "kinds": [
     "menu",

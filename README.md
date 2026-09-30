@@ -21,13 +21,13 @@ Plain `hjkl` without SUPER still types into filter. `ESC` clears filter or close
 
 ```
 vimarchy-menu/
-  plugin/                 # source of truth — copied to Omarchy on install/sync
-    manifest.json         # id=abukiya.menu, clonedFrom=omarchy.menu, kinds=[menu,bar-widget]
-    Menu.qml              # vim nav at ~1150 + fallbackAppLibrary ~81-210 (DesktopEntries + launcher.hides + hidden-entries.sh, no /usr/share edit)
-    MenuModel.js          # upstream model (unchanged)
-    BarWidget.qml         # bar button (routes via clonedFrom)
-  install.sh              # copy plugin/ -> ~/.config/omarchy/plugins/abukiya.menu + enable
-  sync.sh                 # resync after editing plugin/ (real copy, not symlink)
+  manifest.json           # root manifest for `omarchy plugin add`
+  Menu.qml                # vim nav + fallbackAppLibrary (no /usr/share edit)
+  MenuModel.js             # upstream model (unchanged)
+  BarWidget.qml            # bar button (routes via clonedFrom)
+  install.sh               # optional local recovery/development installer
+  sync.sh                  # optional local copy/sync helper
+  scripts/release-check.sh # repository and live validation
   docs/
     stock-vs-vimarchy.md
     architecture.md
@@ -36,29 +36,121 @@ vimarchy-menu/
     shell-patch.md
 ```
 
-> Live dir is a real **copy**, not a symlink. Qt QML refuses bar-widget/menu entry points through symlinked dirs ("File name case mismatch"). Edit `plugin/`, then `./sync.sh`.
+> The public repository keeps `manifest.json` and all entry points at its root because `omarchy plugin add` validates and installs a root-level plugin. The live dir is a real **copy**, not a symlink. Qt QML refuses bar-widget/menu entry points through symlinked dirs ("File name case mismatch").
 
-## Install
+## Install from Omarchy
+
+The supported public installation path is Omarchy's git-plugin installer:
 
 ```sh
-./install.sh
+omarchy plugin add https://github.com/Abukiya/vimarchy-menu.git --enable
 ```
 
-Copies `plugin/` to `~/.config/omarchy/plugins/abukiya.menu`, validates, enables `abukiya.menu` (disables stock via `clonedFrom` routing), rescans shell.
+`omarchy plugin add` validates the repository before installing it into
+`~/.config/omarchy/plugins/abukiya.menu`. The `--enable` step uses the
+supported `omarchy.clonedFrom: omarchy.menu` routing declared by this plugin,
+so the stock menu and its bar entry are replaced without editing
+`/usr/share/omarchy`.
 
-Verify:
+Review the repository before enabling third-party code. Omarchy plugins run
+unsandboxed inside the long-running `omarchy-shell` process.
+
+Quick validation:
+
+```sh
+./scripts/release-check.sh --repo
+omarchy plugin validate .
+```
+
+Verify live state:
 
 ```sh
 omarchy plugin list | grep -E 'menu|abukiya'
 # abukiya.menu enabled, omarchy.menu disabled
 
 omarchy plugin validate ~/.config/omarchy/plugins/abukiya.menu
-omarchy plugin validate ~/Projects/vimarchy-menu/plugin
-diff -q ~/.config/omarchy/plugins/abukiya.menu/Menu.qml ~/Projects/vimarchy-menu/plugin/Menu.qml
+omarchy plugin validate ~/Projects/vimarchy-menu
+./scripts/release-check.sh --live
+diff -q ~/.config/omarchy/plugins/abukiya.menu/Menu.qml ~/Projects/vimarchy-menu/Menu.qml
 # no output = live == repo
 ```
 
-Hyprland bindings are applied automatically via `~/.config/hypr/bindings.lua` — see [Hyprland integration](docs/hyprland-integration.md).
+Upgrade or remove it with Omarchy's plugin lifecycle commands:
+
+```sh
+omarchy plugin update abukiya.menu --yes
+omarchy plugin disable abukiya.menu
+omarchy plugin remove abukiya.menu --yes
+```
+
+`install.sh` and `sync.sh` are retained only for local development and
+recovery workflows. They are not required for normal public installation.
+
+## Configure Hyprland bindings (manual, one time)
+
+The plugin installer cannot edit `~/.config/hypr/bindings.lua` or reload
+Hyprland. This is intentional: public Omarchy plugins run inside
+`omarchy-shell`, while Hyprland configuration belongs to the user. Without
+this step, Hyprland consumes `SUPER+H/J/K/L` as window-focus shortcuts before
+the menu can receive them.
+
+Append the following block to `~/.config/hypr/bindings.lua`:
+
+```lua
+-- vimarchy-menu: focus windows when the menu is closed.
+hl.unbind("SUPER + H")
+hl.unbind("SUPER + J")
+hl.unbind("SUPER + K")
+hl.unbind("SUPER + L")
+
+o.bind("SUPER + H", "Focus left", hl.dsp.focus({ direction = "left" }))
+o.bind("SUPER + J", "Focus down", hl.dsp.focus({ direction = "down" }))
+o.bind("SUPER + K", "Focus up", hl.dsp.focus({ direction = "up" }))
+o.bind("SUPER + L", "Focus right", hl.dsp.focus({ direction = "right" }))
+
+-- Let the menu receive SUPER+HJKL while its exclusive layer is open.
+hl.on("layer.opened", function(layer)
+  if layer.namespace == "omarchy-menu" then
+    hl.unbind("SUPER + H")
+    hl.unbind("SUPER + J")
+    hl.unbind("SUPER + K")
+    hl.unbind("SUPER + L")
+  end
+end)
+
+-- Restore window-focus navigation after the menu closes.
+hl.on("layer.closed", function(layer)
+  if layer.namespace == "omarchy-menu" then
+    o.bind("SUPER + H", "Focus left", hl.dsp.focus({ direction = "left" }))
+    o.bind("SUPER + J", "Focus down", hl.dsp.focus({ direction = "down" }))
+    o.bind("SUPER + K", "Focus up", hl.dsp.focus({ direction = "up" }))
+    o.bind("SUPER + L", "Focus right", hl.dsp.focus({ direction = "right" }))
+  end
+end)
+```
+
+Apply and validate the configuration:
+
+```sh
+luac -p ~/.config/hypr/bindings.lua
+hyprctl reload
+hyprctl configerrors
+```
+
+Expected behavior:
+
+- Menu closed: `SUPER+H/J/K/L` moves window focus.
+- Menu open: `SUPER+H/J/K/L` navigates the menu.
+- Menu closed again: window-focus navigation is restored.
+
+To verify the handoff, the four focus bindings should be present while the
+menu is closed and absent while the `omarchy-menu` layer is open:
+
+```sh
+hyprctl binds 2>&1 |
+  awk 'BEGIN{RS="\n\n"} /Focus left|Focus down|Focus up|Focus right/' |
+  grep -c "Focus"
+```
 
 Apps fallback is self-contained — see [Apps blank root cause](docs/apps-blank-root-cause.md). No edit to `/usr/share` is needed; the menu ships its own `fallbackAppLibrary` (DesktopEntries + `launcher.hides` 39 + `hidden-entries.sh` 27 → 65→48) in `~/.config` (Omarchy skill rule: never edit `/usr/share/omarchy`).
 
@@ -76,7 +168,7 @@ When closed, `SUPER+H/J/K/L` move window focus (`hl.dsp.focus`).
 ## Editing
 
 ```sh
-# edit plugin/Menu.qml, then:
+# edit Menu.qml, then:
 ./sync.sh
 # validates + omarchy-shell shell rescanPlugins
 # fallback: omarchy-shell shell rescanPlugins
@@ -85,7 +177,7 @@ When closed, `SUPER+H/J/K/L` move window focus (`hl.dsp.focus`).
 
 ## How it works
 
-Stock: `SUPER+SPACE` → `omarchy-menu toggle` → `omarchy-shell shell toggle omarchy.menu` → `PluginRegistry.resolveEnabledId` routes `omarchy.menu` → enabled clone `abukiya.menu`. Clone declares `omarchy.clonedFrom: omarchy.menu` so bar button and all `omarchy-menu` wrappers resolve automatically.
+Stock: `SUPER+SPACE` → `omarchy-menu toggle` → `omarchy-shell shell toggle omarchy.menu` → `PluginRegistry.resolveEnabledId` routes `omarchy.menu` → enabled `abukiya.menu`. The public plugin declares `omarchy.clonedFrom: omarchy.menu`, which is also the supported replacement metadata used by `omarchy plugin enable` for third-party plugins; the plugin is not a local symlink or a manual `/usr/share` patch.
 
 Patch is ~20 lines in `Menu.qml` `Keys.onPressed` — four `else if` branches gated on `event.modifiers & Qt.MetaModifier`, inserted **before** the `Left/Backspace` fallback so Meta is checked first. See [Architecture](docs/architecture.md).
 
@@ -110,7 +202,7 @@ hyprctl layers 2>&1 | grep omarchy-menu
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | Menu not opening | abukiya.menu disabled | `omarchy plugin enable abukiya.menu && omarchy-shell shell rescanPlugins` |
-| Apps still "Nothing here yet" | fallback not loaded / shell race | Verify `grep -c fallbackAppLibrary ~/Projects/vimarchy-menu/plugin/Menu.qml` → 1, `omarchy plugin validate` → 0, `omarchy restart shell`, then `SUMMON apps` → layer `omarchy-menu` and 48 rows (65 vals filtered) |
+| Apps still "Nothing here yet" | fallback not loaded / shell race | Verify `grep -c fallbackAppLibrary ~/Projects/vimarchy-menu/Menu.qml` → 1, `omarchy plugin validate` → 0, `omarchy restart shell`, then `SUMMON apps` → layer `omarchy-menu` and 48 rows (65 vals filtered) |
 | SUPER+J moves window not menu | bindings.lua not installed | Ensure `~/.config/hypr/bindings.lua` has layer.opened/closed block; `hyprctl reload`; check `hyprctl binds` counts |
 | Bar stalls after switch | quickshell cache | `omarchy restart shell` |
 | `omarchy plugin validate` fails | edit broke QML | `diff -u` live vs stock, revert; check `qmllint` |

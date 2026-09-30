@@ -139,11 +139,11 @@ sudo rm -f /usr/share/omarchy/shell/shell.qml.bak.vimarchy
 omarchy restart shell
 # verify stock:
 grep -c _canon /usr/share/omarchy/shell/shell.qml  # 0
-grep -c fallbackAppLibrary ~/Projects/vimarchy-menu/plugin/Menu.qml  # 1
-omarchy plugin validate ~/Projects/vimarchy-menu/plugin  # 0
+grep -c fallbackAppLibrary ~/Projects/vimarchy-menu/Menu.qml  # 1
+omarchy plugin validate ~/Projects/vimarchy-menu  # 0
 ```
 
-Proper fix — entirely in `~/.config` (`plugin/Menu.qml` 1564 lines, live `~/.config/omarchy/plugins/abukiya.menu/Menu.qml` identical, no `AppSearch.js` vendoring, no `/usr/share` edit):
+Proper fix — entirely in `~/.config` (`Menu.qml` 1564 lines, live `~/.config/omarchy/plugins/abukiya.menu/Menu.qml` identical, no `AppSearch.js` vendoring, no `/usr/share` edit):
 
 - `fallbackAppLibrary` QtObject `~81-210` — reads `DesktopEntries.applications.values` directly, with hide filtering 65→48:
   - `configuredHiddenEntryIds` preloaded with 39 ids from `/usr/share/omarchy/default/omarchy/launcher.hides` (`avahi-discover` … `xgpsspeed`) and kept live via `FileView fallbackHidesFile` watching that path.
@@ -163,4 +163,3 @@ This keeps Apps at 48 rows without touching `/usr/share`, survives `pacman -Syu 
 ## Evolution — 65 vs 48
 
 Initial fallback had `isHiddenEntry() => false`, so `Apps` briefly showed 65 (all `noDisplay=false` entries). Adding the hide mirrors above restored the stock 48. The 17 delta are the ids hidden by `launcher.hides` + desktop `NotShowIn`/`OnlyShowIn` (e.g. fcitx5 helpers, libreoffice sub-entries, `org.fcitx.*`, etc.).
-

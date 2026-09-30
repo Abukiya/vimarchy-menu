@@ -25,15 +25,15 @@ Bar widget path is analogous: `abukiya.menu` replaces `omarchy.menu` in `bar.lay
 
 | File | Role | Key lines |
 |------|------|-----------|
-| `~/Projects/vimarchy-menu/plugin/manifest.json` | Plugin declaration | `id=abukiya.menu`, `clonedFrom=omarchy.menu`, `kinds=[menu,bar-widget]`, `entryPoints.menu=Menu.qml` |
-| `plugin/Menu.qml:14-15` | Injected props | `property var shell: null` — filled by shell delegate |
-| `plugin/Menu.qml:81-210` | Fallback app library | `fallbackAppLibrary` QtObject: `configuredHiddenEntryIds` (39 preloaded from `launcher.hides`) + `desktopHiddenEntryIds` (27 from `hidden-entries.sh`), `isHiddenEntry`, `sortedEntries` 65→48, `iconSource`/`launch`/`remove`; `FileView fallbackHidesFile`, `Process fallbackHiddenScan`, `Connections` watchers, `appLibrary` prefers `shell.appLibrary` else fallback (no `/usr/share` edit) |
-| `plugin/Menu.qml:301-310` | Item rebuild + eager merge | `rebuildItemsFromSources()` → `rowsLoaded=true` → `try mergeAppRows()` if fallback, then `evaluateGuards` |
-| `plugin/Menu.qml:365-395` | App feed | `mergeAppRows()` uses `_lib = root.appLibrary \|\| root.shell.appLibrary` → `sortedEntries("")` → `MenuModel.mergeAppRows` (filtered 48) |
-| `plugin/Menu.qml:400-420` | Provider start | `startProviderForMenu("apps")` marks loaded and merges app rows without queuing |
-| `plugin/Menu.qml:620-700` | Display build | `rebuildDisplay()` — alphabetical sort when `active=="apps"` |
-| `plugin/Menu.qml:1150-1180` | Vim nav | `Keys.onPressed` four MetaModifier branches before `Backspace/Left` fallback |
-| `plugin/MenuModel.js` | Item model | `mergeAppRows`, `swapProviderRows`, `isVisible`, `searchScore`, `displayRow` |
+| `~/Projects/vimarchy-menu/manifest.json` | Plugin declaration | `id=abukiya.menu`, `clonedFrom=omarchy.menu`, `kinds=[menu,bar-widget]`, `entryPoints.menu=Menu.qml` |
+| `Menu.qml:14-15` | Injected props | `property var shell: null` — filled by shell delegate |
+| `Menu.qml:81-210` | Fallback app library | `fallbackAppLibrary` QtObject: `configuredHiddenEntryIds` (39 preloaded from `launcher.hides`) + `desktopHiddenEntryIds` (27 from `hidden-entries.sh`), `isHiddenEntry`, `sortedEntries` 65→48, `iconSource`/`launch`/`remove`; `FileView fallbackHidesFile`, `Process fallbackHiddenScan`, `Connections` watchers, `appLibrary` prefers `shell.appLibrary` else fallback (no `/usr/share` edit) |
+| `Menu.qml:301-310` | Item rebuild + eager merge | `rebuildItemsFromSources()` → `rowsLoaded=true` → `try mergeAppRows()` if fallback, then `evaluateGuards` |
+| `Menu.qml:365-395` | App feed | `mergeAppRows()` uses `_lib = root.appLibrary \|\| root.shell.appLibrary` → `sortedEntries("")` → `MenuModel.mergeAppRows` (filtered 48) |
+| `Menu.qml:400-420` | Provider start | `startProviderForMenu("apps")` marks loaded and merges app rows without queuing |
+| `Menu.qml:620-700` | Display build | `rebuildDisplay()` — alphabetical sort when `active=="apps"` |
+| `Menu.qml:1150-1180` | Vim nav | `Keys.onPressed` four MetaModifier branches before `Backspace/Left` fallback |
+| `MenuModel.js` | Item model | `mergeAppRows`, `swapProviderRows`, `isVisible`, `searchScore`, `displayRow` |
 | `~/.config/hypr/bindings.lua` | Hypr handoff | `hl.on("layer.opened/closed", namespace=="omarchy-menu")` unbind/rebind `SUPER+H/J/K/L` |
 | `/usr/share/omarchy/shell/shell.qml` | Shell scope (stock) | `createScopedPluginShell` stale-manifest bug — **not patched** (Omarchy skill rule: `/usr/share` read-only); fallback in `~/.config` covers it |
 | `/usr/share/omarchy/shell/services/AppLibrary.qml` | Stock app source (reference) | `DesktopEntries.applications.values` → `AppSearch.sortedEntries` with hide filters (mirrored by fallback) |

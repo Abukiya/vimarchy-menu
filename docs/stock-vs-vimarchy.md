@@ -3,7 +3,7 @@
 | Aspect | Stock `omarchy.menu` | `vimarchy-menu` (`abukiya.menu`) |
 |--------|----------------------|-----------------------------------|
 | Trigger | `SUPER+SPACE` → `omarchy-menu toggle` → `shell toggle omarchy.menu` | Same trigger — shell routes `omarchy.menu` → `abukiya.menu` via `clonedFrom` |
-| Plugin dir | `/usr/share/omarchy/shell/plugins/menu` (read-only) | `~/.config/omarchy/plugins/abukiya.menu` (copy of `plugin/`) + repo `~/Projects/vimarchy-menu/plugin` |
+| Plugin dir | `/usr/share/omarchy/shell/plugins/menu` (read-only) | `~/.config/omarchy/plugins/abukiya.menu` (public repo checkout) + repo root entry files |
 | Manifest | `id=omarchy.menu` | `id=abukiya.menu`, `omarchy.clonedFrom=omarchy.menu`, `kinds=[menu,bar-widget]`, `keepLoaded=true` |
 | Keys | `Up/Down` select, `Left/Backspace` goBack, `Right/Enter` activate, type to filter | Same + `SUPER+H/J/K/L` (H=back, J=down, K=up, L=enter); plain `hjkl` still filters |
 | AppLibrary | `shell.appLibrary` via `pluginShellFor` (stock wiring, 48 rows after hides) | Same when stock works; when `shell.appLibrary` is null for clone, `fallbackAppLibrary` in `~/.config` (DesktopEntries + `launcher.hides` 39 + `hidden-entries.sh` 27 → 65→48, eager merge, no `/usr/share` edit) — `readonly property var appLibrary: shell.appLibrary ? shell : fallback` |
@@ -18,7 +18,7 @@ omarchy plugin list | grep -E 'menu|abukiya'
 # abukiya.menu enabled, omarchy.menu disabled
 
 omarchy plugin validate ~/.config/omarchy/plugins/abukiya.menu
-omarchy plugin validate ~/Projects/vimarchy-menu/plugin
+omarchy plugin validate ~/Projects/vimarchy-menu
 
 # hypr handoff
 hyprctl binds 2>&1 | awk 'BEGIN{RS="\n\n"} /Focus left|Focus down|Focus up|Focus right/' | grep -c "Focus"
