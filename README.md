@@ -88,6 +88,11 @@ Hyprland normally consumes `SUPER+H/J/K/L` as window-focus bindings before the
 menu can receive them. Add this block to `~/.config/hypr/bindings.lua`:
 
 ```lua
+-- Omarchy 4.5 sends SUPER+ALT+SPACE to the dock app grid. Keep Apps on
+-- vimarchy-menu so its SUPER+H/J/K/L handler receives the physical keys.
+hl.unbind("SUPER + ALT + SPACE")
+o.bind("SUPER + ALT + SPACE", "Apps", "omarchy-shell shell summon omarchy.menu '{\"menu\":\"apps\"}'")
+
 -- vimarchy-menu: focus windows while the menu is closed.
 hl.unbind("SUPER + H")
 hl.unbind("SUPER + J")
@@ -131,6 +136,17 @@ hyprctl configerrors
 With the menu closed, `SUPER+H/J/K/L` moves window focus. With the
 `omarchy-menu` layer open, the same keys navigate the menu; after it closes,
 window-focus navigation is restored.
+
+Omarchy 4.5 changed the stock `SUPER+ALT+SPACE` binding to
+`omarchy.dock apps`. Keep the override above in `~/.config/hypr/bindings.lua`
+so the shortcut opens the cloned menu's `apps` route (`omarchy-menu`) rather
+than the dock's `omarchy-dock-apps` layer. Omarchy 4.5 also changed the
+default `apps` row into a dock action; add this user-menu override to
+`~/.config/omarchy/extensions/omarchy-menu.jsonc`:
+
+```jsonc
+"apps": {"icon":"󰀻","label":"Apps","aliases":["app","applications"],"provider":"apps","action":""}
+```
 
 ## Usage
 
@@ -194,7 +210,9 @@ symlink absence, and QML syntax when `qmllint` is available.
    `omarchy-menu` layer, alongside the stock key handling.
 4. Hyprland temporarily unbinds the four global focus shortcuts while that
    layer is open, then restores them when it closes.
-5. For Apps, the plugin prefers Omarchy's `shell.appLibrary`. If that service
+5. On Omarchy 4.5, the user binding routes `SUPER+ALT+SPACE` away from
+   `omarchy.dock apps` and the user menu override restores Apps as a submenu.
+6. For Apps, the plugin prefers Omarchy's `shell.appLibrary`. If that service
    is unavailable for a cloned menu, the local fallback reads desktop entries
    from the user-space QML environment and applies the same hide rules.
 
@@ -208,6 +226,7 @@ comparison.
 | Symptom | Fix |
 | --- | --- |
 | Menu does not open | Run `omarchy plugin enable abukiya.menu` followed by `omarchy-shell shell rescanPlugins`. |
+| `SUPER+ALT+SPACE` opens the dock or HJKL does nothing | Add both Omarchy 4.5 overrides from [Configure Hyprland](#configure-hyprland), reload the menu with `omarchy menu refresh`, then run `hyprctl reload`. |
 | `SUPER+J` moves a window while the menu is open | Add the `layer.opened`/`layer.closed` block, then run `hyprctl reload`. |
 | Apps shows “Nothing here yet” | Confirm `fallbackAppLibrary` exists in `Menu.qml`, run `omarchy plugin validate`, and restart the shell with `omarchy restart shell`. |
 | Bar stops responding after switching | Run `omarchy restart shell`; then validate that the live copy matches the repository. |
