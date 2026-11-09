@@ -190,6 +190,15 @@ Item {
   }
   // Prefers shell's appLibrary; falls back to local DesktopEntries.
   readonly property var appLibrary: (root.shell && root.shell.appLibrary) ? root.shell.appLibrary : fallbackAppLibrary
+  function appLibraryForUse() {
+    var candidate = root.shell && root.shell.appLibrary ? root.shell.appLibrary : null
+    if (candidate) {
+      try {
+        if (candidate.sortedEntries("").length > 0) return candidate
+      } catch (e) {}
+    }
+    return fallbackAppLibrary
+  }
   property bool deleteConfirmOpen: false
   property var deleteTarget: null
   onOpenedChanged: if (!opened) { deleteConfirmOpen = false; deleteTarget = null }
@@ -401,7 +410,7 @@ Item {
   // (DesktopEntries) instead of a bash enumeration, so they carry image
   // icons, launch feedback, and uninstall support like the launcher.
   function mergeAppRows() {
-    var _lib = root.appLibrary || (root.shell ? root.shell.appLibrary : null)
+    var _lib = root.appLibraryForUse()
     if (!_lib) return
     var rows = _lib.sortedEntries("")
     var appRows = []
@@ -851,7 +860,8 @@ Item {
       applySerial = requestSerial
       opened = false
       filterText = ""
-      if (root.appLibrary) root.appLibrary.launch(appId, label)
+      var _lib = root.appLibraryForUse()
+      if (_lib) _lib.launch(appId, label)
     } else {
       root.applySelected(row.itemId, row.action)
     }
@@ -880,7 +890,8 @@ Item {
     root.deleteTarget = null
     if (!target) return
     root.cancel()
-    if (root.appLibrary) root.appLibrary.remove(target.appId, target.label)
+    var _lib = root.appLibraryForUse()
+    if (_lib) _lib.remove(target.appId, target.label)
   }
 
   function applyDmenuSelection(value) {
@@ -924,7 +935,8 @@ Item {
     loadProviderForMenu(activeMenu)
     // The shell may start before first-install packages have finished placing
     // their icons. Refresh here even when the desktop entry list did not change.
-    if (root.appLibrary) root.appLibrary.refreshIcons()
+    var _lib = root.appLibraryForUse()
+    if (_lib) _lib.refreshIcons()
 
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
@@ -1394,7 +1406,7 @@ Item {
                 // PNG icons upscaled and blurry on HiDPI displays.
                 sourceSize.width: width * Screen.devicePixelRatio
                 sourceSize.height: height * Screen.devicePixelRatio
-                source: row.isApp && root.appLibrary ? root.appLibrary.iconSource(row.appIcon) : ""
+                source: row.isApp ? root.appLibraryForUse().iconSource(row.appIcon) : ""
                 asynchronous: true
                 anchors.left: parent.left
                 anchors.leftMargin: root.rowReservedBorderLeft + Style.space(8) + (Style.space(36) - width) / 2
